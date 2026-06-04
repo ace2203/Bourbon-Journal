@@ -1633,6 +1633,45 @@ fun ProfileWheelScreen(viewModel: BourbonViewModel, navController: NavController
 fun CollectionListScreen(viewModel: BourbonViewModel, navController: NavController) {
     val bottles by viewModel.allBottles.collectAsState()
 
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedDistillery by remember { mutableStateOf("All") }
+    var selectedAge by remember { mutableStateOf("All") }
+    var selectedProofRange by remember { mutableStateOf("All") }
+    var isFiltersExpanded by remember { mutableStateOf(false) }
+
+    val uniqueDistilleries = remember(bottles) {
+        listOf("All") + bottles.map { it.distillery.trim() }.filter { it.isNotEmpty() }.distinct().sorted()
+    }
+    val uniqueAges = remember(bottles) {
+        listOf("All") + bottles.map { it.age.trim() }.filter { it.isNotEmpty() }.distinct().sorted()
+    }
+    val proofOptions = listOf("All", "Under 90 Proof", "90 - 100 Proof", "101 - 110 Proof", "111 - 120 Proof", "Over 120 Proof")
+    val hasActiveFilters = selectedDistillery != "All" || selectedAge != "All" || selectedProofRange != "All"
+
+    val filteredBottles = bottles.filter { bottle ->
+        val matchesSearch = searchQuery.isBlank() ||
+                bottle.name.contains(searchQuery, ignoreCase = true) ||
+                bottle.nickname.contains(searchQuery, ignoreCase = true) ||
+                bottle.distillery.contains(searchQuery, ignoreCase = true) ||
+                bottle.category.contains(searchQuery, ignoreCase = true)
+
+        val matchesDistillery = selectedDistillery == "All" || bottle.distillery.equals(selectedDistillery, ignoreCase = true)
+        val matchesAge = selectedAge == "All" || bottle.age.equals(selectedAge, ignoreCase = true)
+
+        val proofVal = bottle.proof.toDoubleOrNull() ?: 0.0
+        val matchesProof = when (selectedProofRange) {
+            "All" -> true
+            "Under 90 Proof" -> proofVal < 90.0
+            "90 - 100 Proof" -> proofVal in 90.0..100.0
+            "101 - 110 Proof" -> proofVal in 101.0..110.0
+            "111 - 120 Proof" -> proofVal in 111.0..120.0
+            "Over 120 Proof" -> proofVal > 120.0
+            else -> true
+        }
+
+        matchesSearch && matchesDistillery && matchesAge && matchesProof
+    }
+
     JournalScreenScaffold(
         title = "Cabinet Collection",
         subtitle = "Sub-Bottle Inventory",
@@ -1652,11 +1691,254 @@ fun CollectionListScreen(viewModel: BourbonViewModel, navController: NavControll
                 }
             }
         } else {
-            // Sort in alphabetical order by bottle names as specified on Page 15
-            val sortedBottles = bottles.sortedBy { it.name.lowercase() }
+            // Interactive Search & Filter Panel
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, SlateMuted, RoundedCornerShape(12.dp)),
+                colors = CardDefaults.cardColors(containerColor = DarkCharcoal),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search distillery, nickname, brand...", color = TextSoftGray, style = MaterialTheme.typography.bodyMedium) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = PrimaryAmber) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSoftGray)
+                                    }
+                                }
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.5f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted
+                            ),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                sortedBottles.forEach { bottle ->
+                        Button(
+                            onClick = { isFiltersExpanded = !isFiltersExpanded },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isFiltersExpanded || hasActiveFilters) PrimaryAmber else SlateMuted
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = "Filters",
+                                tint = if (isFiltersExpanded || hasActiveFilters) ObsidianBlack else TextWarmWhite,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Filters",
+                                color = if (isFiltersExpanded || hasActiveFilters) ObsidianBlack else TextWarmWhite,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isFiltersExpanded) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Divider(color = SlateMuted.copy(alpha = 0.4f), modifier = Modifier.padding(vertical = 4.dp))
+
+                            // Distillery filter
+                            var isDistExpanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = "Distillery: $selectedDistillery",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedTextColor = TextWarmWhite,
+                                        unfocusedTextColor = TextWarmWhite,
+                                        focusedContainerColor = SlateMuted.copy(alpha = 0.3f),
+                                        unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                    ),
+                                    trailingIcon = {
+                                        IconButton(onClick = { isDistExpanded = true }) {
+                                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = PrimaryAmber)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+
+                                DropdownMenu(
+                                    expanded = isDistExpanded,
+                                    onDismissRequest = { isDistExpanded = false },
+                                    modifier = Modifier
+                                        .background(DarkCharcoal)
+                                        .border(1.dp, SlateMuted, RoundedCornerShape(8.dp))
+                                ) {
+                                    uniqueDistilleries.forEach { dist ->
+                                        DropdownMenuItem(
+                                            text = { Text(dist, color = TextWarmWhite) },
+                                            onClick = {
+                                                selectedDistillery = dist
+                                                isDistExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Age filter
+                            var isAgeExpanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = "Age: $selectedAge",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedTextColor = TextWarmWhite,
+                                        unfocusedTextColor = TextWarmWhite,
+                                        focusedContainerColor = SlateMuted.copy(alpha = 0.3f),
+                                        unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                    ),
+                                    trailingIcon = {
+                                        IconButton(onClick = { isAgeExpanded = true }) {
+                                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = PrimaryAmber)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+
+                                DropdownMenu(
+                                    expanded = isAgeExpanded,
+                                    onDismissRequest = { isAgeExpanded = false },
+                                    modifier = Modifier
+                                        .background(DarkCharcoal)
+                                        .border(1.dp, SlateMuted, RoundedCornerShape(8.dp))
+                                ) {
+                                    uniqueAges.forEach { ageVal ->
+                                        DropdownMenuItem(
+                                            text = { Text(ageVal, color = TextWarmWhite) },
+                                            onClick = {
+                                                selectedAge = ageVal
+                                                isAgeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Proof range filter
+                            var isProofExpanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = "Proof: $selectedProofRange",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedTextColor = TextWarmWhite,
+                                        unfocusedTextColor = TextWarmWhite,
+                                        focusedContainerColor = SlateMuted.copy(alpha = 0.3f),
+                                        unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                    ),
+                                    trailingIcon = {
+                                        IconButton(onClick = { isProofExpanded = true }) {
+                                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = PrimaryAmber)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+
+                                DropdownMenu(
+                                    expanded = isProofExpanded,
+                                    onDismissRequest = { isProofExpanded = false },
+                                    modifier = Modifier
+                                        .background(DarkCharcoal)
+                                        .border(1.dp, SlateMuted, RoundedCornerShape(8.dp))
+                                ) {
+                                    proofOptions.forEach { pOf ->
+                                        DropdownMenuItem(
+                                            text = { Text(pOf, color = TextWarmWhite) },
+                                            onClick = {
+                                                selectedProofRange = pOf
+                                                isProofExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (hasActiveFilters) {
+                                TextButton(
+                                    onClick = {
+                                        selectedDistillery = "All"
+                                        selectedAge = "All"
+                                        selectedProofRange = "All"
+                                    },
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("Reset Filters", color = PrimaryAmber, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (filteredBottles.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("🔍", fontSize = 48.sp)
+                        Text("No Matching Pours", color = TextWarmWhite, fontWeight = FontWeight.Bold)
+                        Text("Try revising your search query or expanding your active filters.", color = TextSoftGray, textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                searchQuery = ""
+                                selectedDistillery = "All"
+                                selectedAge = "All"
+                                selectedProofRange = "All"
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SlateMuted)
+                        ) {
+                            Text("Reset All", color = TextWarmWhite)
+                        }
+                    }
+                }
+            } else {
+                // Sort in alphabetical order by bottle names as specified on Page 15
+                val sortedBottles = filteredBottles.sortedBy { it.name.lowercase() }
+
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    sortedBottles.forEach { bottle ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1711,6 +1993,7 @@ fun CollectionListScreen(viewModel: BourbonViewModel, navController: NavControll
             }
         }
     }
+}
 }
 
 /**
@@ -1901,6 +2184,44 @@ fun SpecificSubBottleScreen(
                 AverageItem("Overall", avgOverall)
             }
         }
+
+        Button(
+            onClick = {
+                if (bottle != null && sub != null) {
+                    viewModel.clearReviewFlow()
+                    viewModel.selectExistingReviewBottle(bottle)
+                    viewModel.directReviewSubBottleId = sub.subBottleId
+                    val calendar = Calendar.getInstance()
+                    val year = calendar.get(Calendar.YEAR)
+                    val month = calendar.get(Calendar.MONTH) + 1
+                    val day = calendar.get(Calendar.DAY_OF_MONTH)
+                    viewModel.pourWhen = String.format("%d-%02d-%02d", year, month, day)
+                    viewModel.pourPrice = if (sub.price != "N/A" && sub.price.isNotEmpty()) sub.price else "0"
+                    
+                    // Route directly to Tasting Pour
+                    navController.navigate(Routes.POUR)
+                }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryAmber),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.RateReview,
+                contentDescription = null,
+                tint = ObsidianBlack,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "LOG REVIEW FOR THIS POUR",
+                color = ObsidianBlack,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
             text = "REVIEWS SEQUENCE (DATE RECENT TO LEAST)",
@@ -2709,6 +3030,37 @@ fun BlindRevealScreen(viewModel: BourbonViewModel, navController: NavController)
 @Composable
 fun CompletedBlindsScreen(viewModel: BourbonViewModel, navController: NavController) {
     val blinds by viewModel.allBlinds.collectAsState()
+    val allReveals by viewModel.allBlindReveals.collectAsState()
+
+    var searchQuery by remember { mutableStateOf("") }
+    var sizeFilter by remember { mutableStateOf("All") }
+    var isFiltersExpanded by remember { mutableStateOf(false) }
+
+    val sizeOptions = listOf("All", "1 Pour", "2 Pours", "3 Pours", "4+ Pours")
+    val hasActiveFilters = sizeFilter != "All"
+
+    val filteredBlinds = blinds.filter { blind ->
+        val blindReveals = allReveals.filter { it.blindId == blind.blindId }
+        val matchesSearch = searchQuery.isBlank() ||
+                blind.theme.contains(searchQuery, ignoreCase = true) ||
+                blind.wherePlace.contains(searchQuery, ignoreCase = true) ||
+                blindReveals.any { reveal ->
+                    reveal.revealedName.contains(searchQuery, ignoreCase = true) ||
+                    reveal.revealedDistillery.contains(searchQuery, ignoreCase = true) ||
+                    reveal.revealedCategory.contains(searchQuery, ignoreCase = true)
+                }
+
+        val matchesSize = when (sizeFilter) {
+            "All" -> true
+            "1 Pour" -> blind.numberOfPours == 1
+            "2 Pours" -> blind.numberOfPours == 2
+            "3 Pours" -> blind.numberOfPours == 3
+            "4+ Pours" -> blind.numberOfPours >= 4
+            else -> true
+        }
+
+        matchesSearch && matchesSize
+    }
 
     JournalScreenScaffold(
         title = "Completed Sessions",
@@ -2729,7 +3081,163 @@ fun CompletedBlindsScreen(viewModel: BourbonViewModel, navController: NavControl
                 }
             }
         } else {
-            blinds.forEach { blind ->
+            // Interactive Search & Filter Panel for Blinds
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, SlateMuted, RoundedCornerShape(12.dp)),
+                colors = CardDefaults.cardColors(containerColor = DarkCharcoal),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search theme, location, custom pours...", color = TextSoftGray, style = MaterialTheme.typography.bodyMedium) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = PrimaryAmber) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSoftGray)
+                                    }
+                                }
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.5f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted
+                            ),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
+                        )
+
+                        Button(
+                            onClick = { isFiltersExpanded = !isFiltersExpanded },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isFiltersExpanded || hasActiveFilters) PrimaryAmber else SlateMuted
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = "Filters",
+                                tint = if (isFiltersExpanded || hasActiveFilters) ObsidianBlack else TextWarmWhite,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Filters",
+                                color = if (isFiltersExpanded || hasActiveFilters) ObsidianBlack else TextWarmWhite,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isFiltersExpanded) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Divider(color = SlateMuted.copy(alpha = 0.4f), modifier = Modifier.padding(vertical = 4.dp))
+
+                            // Session size filter dropdown
+                            var isSizeExpanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = "Session Size: $sizeFilter",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedTextColor = TextWarmWhite,
+                                        unfocusedTextColor = TextWarmWhite,
+                                        focusedContainerColor = SlateMuted.copy(alpha = 0.3f),
+                                        unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                    ),
+                                    trailingIcon = {
+                                        IconButton(onClick = { isSizeExpanded = true }) {
+                                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = PrimaryAmber)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+
+                                DropdownMenu(
+                                    expanded = isSizeExpanded,
+                                    onDismissRequest = { isSizeExpanded = false },
+                                    modifier = Modifier
+                                        .background(DarkCharcoal)
+                                        .border(1.dp, SlateMuted, RoundedCornerShape(8.dp))
+                                ) {
+                                    sizeOptions.forEach { opt ->
+                                        DropdownMenuItem(
+                                            text = { Text(opt, color = TextWarmWhite) },
+                                            onClick = {
+                                                sizeFilter = opt
+                                                isSizeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (hasActiveFilters) {
+                                TextButton(
+                                    onClick = {
+                                        sizeFilter = "All"
+                                    },
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("Reset Filters", color = PrimaryAmber, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (filteredBlinds.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("🔍", fontSize = 48.sp)
+                        Text("No Matching Sessions", color = TextWarmWhite, fontWeight = FontWeight.Bold)
+                        Text("Try revising your search text or active size filter.", color = TextSoftGray, textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                searchQuery = ""
+                                sizeFilter = "All"
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SlateMuted)
+                        ) {
+                            Text("Reset All", color = TextWarmWhite)
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
+                filteredBlinds.forEach { blind ->
                 var expandedRevealList by remember { mutableStateOf(false) }
                 val revealsState = viewModel.getRevealsForBlind(blind.blindId).collectAsState(initial = emptyList())
 
@@ -2839,6 +3347,7 @@ fun CompletedBlindsScreen(viewModel: BourbonViewModel, navController: NavControl
             }
         }
     }
+}
 }
 
 /**

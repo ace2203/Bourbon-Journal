@@ -47,6 +47,9 @@ interface BourbonDao {
     @Query("SELECT * FROM blind_reveals WHERE blindId = :blindId ORDER BY pourNumber ASC")
     fun getRevealsForBlind(blindId: Long): Flow<List<BlindReveal>>
 
+    @Query("SELECT * FROM blind_reveals")
+    fun getAllBlindRevealsFlow(): Flow<List<BlindReveal>>
+
     @Query("SELECT * FROM blind_reveals WHERE revealId = :revealId LIMIT 1")
     suspend fun getBlindRevealById(revealId: Long): BlindReveal?
 

@@ -7,6 +7,7 @@ class BourbonRepository(private val dao: BourbonDao) {
     val allReviews: Flow<List<Review>> = dao.getAllReviews()
     val allSubBottles: Flow<List<SubBottle>> = dao.getAllSubBottles()
     val allBlinds: Flow<List<Blind>> = dao.getAllBlinds()
+    val allBlindReveals: Flow<List<BlindReveal>> = dao.getAllBlindRevealsFlow()
 
     suspend fun getBottleById(id: Long): Bottle? = dao.getBottleById(id)
     suspend fun getBottleByName(name: String): Bottle? = dao.getBottleByName(name)

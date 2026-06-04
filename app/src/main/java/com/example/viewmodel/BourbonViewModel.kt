@@ -37,6 +37,9 @@ class BourbonViewModel(application: Application) : AndroidViewModel(application)
     val allBlinds: StateFlow<List<Blind>> = repository.allBlinds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allBlindReveals: StateFlow<List<BlindReveal>> = repository.allBlindReveals
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // UI state states
     var appTheme by mutableStateOf("Elegant Dark")
 
@@ -126,6 +129,7 @@ class BourbonViewModel(application: Application) : AndroidViewModel(application)
     var isNewBottleFlow by mutableStateOf(false)
     var isNewBottleOwned by mutableStateOf(false)
     var reReviewType by mutableStateOf("") // "Same Bottle", "Re-Purchase", "Single Pour"
+    var directReviewSubBottleId by mutableStateOf<Long?>(null)
 
     // Clear Review forms
     fun clearReviewFlow() {
@@ -133,6 +137,7 @@ class BourbonViewModel(application: Application) : AndroidViewModel(application)
         reviewNickname = ""
         selectedAutoCompleteBottle = null
         isNewBottleOwned = false
+        directReviewSubBottleId = null
         infoDistillery = ""
         infoAge = ""
         infoProof = ""
@@ -211,7 +216,9 @@ class BourbonViewModel(application: Application) : AndroidViewModel(application)
             // Determine correct sub-bottle
             var targetSubBottleId: Long = 0L
 
-            if (reReviewType == "Single Pour") {
+            if (directReviewSubBottleId != null) {
+                targetSubBottleId = directReviewSubBottleId!!
+            } else if (reReviewType == "Single Pour") {
                 // Target the unowned catch-all (SubBottle 0)
                 val sub0 = repository.getSubBottleByNumber(bottleId, 0)
                 if (sub0 == null) {
