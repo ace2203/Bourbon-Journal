@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.squareup.moshi.JsonClass
 
 class BourbonViewModel(application: Application) : AndroidViewModel(application) {
     private val database = BourbonDatabase.getDatabase(application)
@@ -479,7 +482,148 @@ class BourbonViewModel(application: Application) : AndroidViewModel(application)
     fun getRevealsForBlind(blindId: Long): Flow<List<BlindReveal>> {
         return repository.getRevealsForBlind(blindId)
     }
+
+    suspend fun getBlindRevealById(revealId: Long): BlindReveal? {
+        return repository.getBlindRevealById(revealId)
+    }
+
+    fun resetAndPrepopulateDatabase(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.resetAndPrepopulate()
+            onComplete()
+        }
+    }
+
+    var databaseBackup by mutableStateOf<DatabaseBackup?>(null)
+        private set
+
+    fun clearDatabase(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.clearDatabase()
+            onComplete()
+        }
+    }
+
+    fun prepopulateSampleData(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.prepopulateSampleData()
+            onComplete()
+        }
+    }
+
+    fun backupDatabaseToMemory(onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val bottles = repository.getAllBottlesSync()
+                val subBottles = repository.getAllSubBottlesSync()
+                val reviews = repository.getAllReviewsSync()
+                val blinds = repository.getAllBlindsSync()
+                val blindReveals = repository.getAllBlindRevealsSync()
+
+                databaseBackup = DatabaseBackup(
+                    bottles = bottles,
+                    subBottles = subBottles,
+                    reviews = reviews,
+                    blinds = blinds,
+                    blindReveals = blindReveals
+                )
+                onComplete(true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(false)
+            }
+        }
+    }
+
+    fun restoreDatabaseFromMemory(onComplete: (Boolean) -> Unit = {}) {
+        val backup = databaseBackup
+        if (backup == null) {
+            onComplete(false)
+            return
+        }
+        viewModelScope.launch {
+            try {
+                repository.restoreDatabase(
+                    bottles = backup.bottles,
+                    subBottles = backup.subBottles,
+                    reviews = backup.reviews,
+                    blinds = backup.blinds,
+                    reveals = backup.blindReveals
+                )
+                onComplete(true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(false)
+            }
+        }
+    }
+
+    fun exportDatabaseToJsonString(onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val bottles = repository.getAllBottlesSync()
+                val subBottles = repository.getAllSubBottlesSync()
+                val reviews = repository.getAllReviewsSync()
+                val blinds = repository.getAllBlindsSync()
+                val blindReveals = repository.getAllBlindRevealsSync()
+
+                val backup = DatabaseBackup(
+                    bottles = bottles,
+                    subBottles = subBottles,
+                    reviews = reviews,
+                    blinds = blinds,
+                    blindReveals = blindReveals
+                )
+
+                val moshi = Moshi.Builder()
+                    .add(KotlinJsonAdapterFactory())
+                    .build()
+                val adapter = moshi.adapter(DatabaseBackup::class.java)
+                val jsonStr = adapter.toJson(backup)
+                onComplete(jsonStr)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(null)
+            }
+        }
+    }
+
+    fun importDatabaseFromJsonString(jsonStr: String, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val moshi = Moshi.Builder()
+                    .add(KotlinJsonAdapterFactory())
+                    .build()
+                val adapter = moshi.adapter(DatabaseBackup::class.java)
+                val backup = adapter.fromJson(jsonStr)
+                if (backup != null) {
+                    repository.restoreDatabase(
+                        bottles = backup.bottles,
+                        subBottles = backup.subBottles,
+                        reviews = backup.reviews,
+                        blinds = backup.blinds,
+                        reveals = backup.blindReveals
+                    )
+                    onComplete(true)
+                } else {
+                    onComplete(false)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(false)
+            }
+        }
+    }
 }
+
+@JsonClass(generateAdapter = true)
+data class DatabaseBackup(
+    val bottles: List<Bottle>,
+    val subBottles: List<SubBottle>,
+    val reviews: List<Review>,
+    val blinds: List<Blind>,
+    val blindReveals: List<BlindReveal>
+)
 
 data class BourbonStats(
     val highestRankedBottle: String = "N/A",

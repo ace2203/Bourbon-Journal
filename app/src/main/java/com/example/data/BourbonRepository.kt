@@ -21,6 +21,30 @@ class BourbonRepository(private val dao: BourbonDao) {
     fun getReviewsForBottle(bottleId: Long): Flow<List<Review>> = dao.getReviewsForBottle(bottleId)
 
     fun getRevealsForBlind(blindId: Long): Flow<List<BlindReveal>> = dao.getRevealsForBlind(blindId)
+    suspend fun getBlindRevealById(revealId: Long): BlindReveal? = dao.getBlindRevealById(revealId)
+    suspend fun resetAndPrepopulate() = dao.resetAndPrepopulate()
+    suspend fun clearDatabase() = dao.clearDatabase()
+    suspend fun prepopulateSampleData() = dao.prepopulateSampleData()
+
+    suspend fun getAllSubBottlesSync(): List<SubBottle> = dao.getAllSubBottlesSync()
+    suspend fun getAllReviewsSync(): List<Review> = dao.getAllReviewsSync()
+    suspend fun getAllBlindsSync(): List<Blind> = dao.getAllBlindsSync()
+    suspend fun getAllBlindRevealsSync(): List<BlindReveal> = dao.getAllBlindRevealsSync()
+
+    suspend fun restoreDatabase(
+        bottles: List<Bottle>,
+        subBottles: List<SubBottle>,
+        reviews: List<Review>,
+        blinds: List<Blind>,
+        reveals: List<BlindReveal>
+    ) {
+        dao.clearDatabase()
+        dao.insertBottles(bottles)
+        dao.insertSubBottles(subBottles)
+        dao.insertReviews(reviews)
+        dao.insertBlinds(blinds)
+        dao.insertBlindReveals(reveals)
+    }
 
     suspend fun insertBottle(bottle: Bottle): Long = dao.insertBottle(bottle)
     suspend fun createBottleWithSubBottles(bottle: Bottle): Long = dao.createBottleWithSubBottles(bottle)

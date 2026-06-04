@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.app.DatePickerDialog
 import java.util.Calendar
 import com.example.data.*
@@ -64,6 +66,7 @@ object Routes {
     const val BLIND_RANKS = "blind_ranks"
     const val BLIND_REVEAL = "blind_reveal"
     const val COMPLETED_BLINDS = "completed_blinds"
+    const val COMPARE_REVEAL = "compare_reveal"
 }
 
 /**
@@ -308,6 +311,304 @@ fun JournalScreenScaffold(
  */
 @Composable
 fun HomeScreen(viewModel: BourbonViewModel, navController: NavController) {
+    val context = LocalContext.current
+    var showAdminDialog by remember { mutableStateOf(false) }
+    var adminMessage by remember { mutableStateOf<String?>(null) }
+
+    // Launcher for exporting DB backup to a selected path on user device
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportDatabaseToJsonString { jsonStr ->
+                if (jsonStr != null) {
+                    try {
+                        context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                            outputStream.write(jsonStr.toByteArray(Charsets.UTF_8))
+                        }
+                        adminMessage = "✓ Database backup successfully saved to your device!"
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        adminMessage = "✗ Error writing file: ${e.message}"
+                    }
+                } else {
+                    adminMessage = "✗ Failed to serialize active database."
+                }
+            }
+        }
+    }
+
+    // Launcher for importing DB backup from user device
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val jsonStr = inputStream?.bufferedReader()?.use { it.readText() }
+                if (!jsonStr.isNullOrBlank()) {
+                    viewModel.importDatabaseFromJsonString(jsonStr) { success ->
+                        adminMessage = if (success) "✓ Database successfully restored from your chosen backup!"
+                                       else "✗ Restore failed. Please ensure the JSON file is a valid tasting journal backup."
+                    }
+                } else {
+                    adminMessage = "✗ Failed to parse backup file: selected file is empty."
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                adminMessage = "✗ Error reading file: ${e.message}"
+            }
+        }
+    }
+
+    if (showAdminDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAdminDialog = false
+                adminMessage = null
+            },
+            title = {
+                Text(
+                    text = "DATABASE ADMINISTRATION",
+                    color = TextWarmWhite,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    letterSpacing = 1.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Manage your offline database state, backup records dynamically to memory or device storage, or load demo environments.",
+                        color = TextSoftGray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (adminMessage != null) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = PrimaryAmber.copy(alpha = 0.15f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, PrimaryAmber.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = adminMessage!!,
+                                color = PrimaryAmber,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+
+                    // --- SECTION 1: DEVICE STORAGE BACKUPS (NEW!) ---
+                    Text(
+                        text = "DEVICE STORAGE BACKUP (.JSON)",
+                        color = PrimaryAmber,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Text(
+                        text = "Export whole database to a custom file location on your phone or tablet, or locate an existing backup file to restore.",
+                        color = TextSoftGray,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Export to custom location
+                        Button(
+                            onClick = {
+                                createDocumentLauncher.launch("bourbon_journal_backup.json")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryAmber),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Export file",
+                                tint = ObsidianBlack,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Export File", color = ObsidianBlack, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Import from custom location
+                        Button(
+                            onClick = {
+                                openDocumentLauncher.launch(arrayOf("application/json", "*/*"))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkCharcoal),
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(1.dp, PrimaryAmber.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = "Import file",
+                                tint = PrimaryAmber,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Import File", color = PrimaryAmber, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Divider(color = SlateMuted.copy(alpha = 0.4f))
+
+                    // --- SECTION 2: IN-MEMORY BACKUPS ---
+                    Text(
+                        text = "IN-MEMORY BACKUP & RESTORE",
+                        color = PrimaryAmber,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    val backup = viewModel.databaseBackup
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SlateMuted.copy(alpha = 0.15f)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = if (backup == null) "🔴 No active backup in memory."
+                                else "🟢 Backup available: ${backup.bottles.size} Bottles, ${backup.reviews.size} Reviews, ${backup.blinds.size} Blinds",
+                                color = if (backup == null) TextSoftGray else TextWarmWhite,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (backup == null) FontWeight.Normal else FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Backup Action
+                        Button(
+                            onClick = {
+                                viewModel.backupDatabaseToMemory { success ->
+                                    adminMessage = if (success) "✓ Successfully backed up active database state to volatile memory!" else "✗ Backup failed."
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkCharcoal),
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(1.dp, SlateMuted.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 10.dp)
+                        ) {
+                            Text("Save Backup", color = TextWarmWhite, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Restore Action
+                        Button(
+                            onClick = {
+                                viewModel.restoreDatabaseFromMemory { success ->
+                                    adminMessage = if (success) "✓ Active database restored successfully from memory backup!" else "✗ Restore failed (Backup is empty or corrupt)."
+                                }
+                            },
+                            enabled = backup != null,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PrimaryAmber.copy(alpha = 0.2f),
+                                disabledContainerColor = DarkCharcoal.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(
+                                    width = 1.dp,
+                                    color = if (backup != null) PrimaryAmber.copy(alpha = 0.5f) else SlateMuted.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 10.dp)
+                        ) {
+                            Text("Load Backup", color = if (backup != null) PrimaryAmber else TextSoftGray, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Divider(color = SlateMuted.copy(alpha = 0.4f))
+
+                    // --- SECTION 3: DATABASE WIPING & POPULATION ---
+                    Text(
+                        text = "WIPE & PREPOPULATE OPERATIONS",
+                        color = PrimaryAmber,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Clear Database Button
+                        Button(
+                            onClick = {
+                                viewModel.clearDatabase {
+                                    adminMessage = "✓ Active database has been completely wiped (0 objects remains)."
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            modifier = Modifier
+                                .weight(1f)
+                                .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 10.dp)
+                        ) {
+                            Text("Clear Database", color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Populate Sample Data Button
+                        Button(
+                            onClick = {
+                                viewModel.prepopulateSampleData {
+                                    adminMessage = "✓ Loaded 3 realistic bottles (with 2 reviews each) and 3 blind tasting flights under 1-7 score scale!"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryAmber),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 10.dp)
+                        ) {
+                            Text("Load Sample Data", color = ObsidianBlack, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAdminDialog = false
+                        adminMessage = null
+                    }
+                ) {
+                    Text("Close Panel", color = PrimaryAmber, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = DarkCharcoal,
+            titleContentColor = TextWarmWhite,
+            textContentColor = TextSoftGray
+        )
+    }
+
     Scaffold(
         topBar = {
             Column(
@@ -423,6 +724,14 @@ fun HomeScreen(viewModel: BourbonViewModel, navController: NavController) {
                 description = "Revisit history of blind sessions, past scores, and ranking results.",
                 icon = "🏁",
                 onClick = { navController.navigate(Routes.COMPLETED_BLINDS) }
+            )
+
+            // Database Administration
+            DashboardOptionCard(
+                title = "Database Administration",
+                description = "Separate controls to Clear DB, load prepopulated examples, or capture & restore database backups.",
+                icon = "⚙️",
+                onClick = { showAdminDialog = true }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -2465,42 +2774,309 @@ fun CompletedBlindsScreen(viewModel: BourbonViewModel, navController: NavControl
                             Spacer(modifier = Modifier.height(8.dp))
 
                             revealsState.value.sortedBy { it.rank }.forEach { rev ->
-                                Column(
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 8.dp)
+                                        .padding(vertical = 6.dp)
+                                        .clickable { navController.navigate("${Routes.COMPARE_REVEAL}/${rev.revealId}") }
+                                        .border(1.dp, SlateMuted.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = SlateMuted.copy(alpha = 0.2f)),
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp)
                                     ) {
-                                        Text(
-                                            text = "Rank #${rev.rank} - Pour Glass #${rev.pourNumber}",
-                                            color = PrimaryAmber,
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .background(SlateMuted, CircleShape)
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(rev.revealedCategory, color = TextWarmWhite, style = MaterialTheme.typography.labelSmall)
+                                            Text(
+                                                text = "Rank #${rev.rank} - Pour Glass #${rev.pourNumber}",
+                                                color = PrimaryAmber,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(SlateMuted, CircleShape)
+                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(rev.revealedCategory, color = TextWarmWhite, style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(rev.revealedName, color = TextWarmWhite, fontWeight = FontWeight.SemiBold)
+                                        Text("Distillery: ${rev.revealedDistillery} • Proof: ${rev.revealedProof}", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
+                                        Text("Assessments: Nose ${rev.revealedNoseScore}/7 | Palate ${rev.revealedPalateScore}/7 | Finish ${rev.revealedFinishScore}/7", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
+                                        if (rev.revealedNotes.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text("Overall notes: ${rev.revealedNotes}", color = TextSoftGray, fontStyle = FontStyle.Italic, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Compare Guesses", color = PrimaryAmber, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.ChevronRight,
+                                                contentDescription = "Compare Guesses",
+                                                tint = PrimaryAmber,
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                         }
                                     }
-                                    Text("revealed: ${rev.revealedName}", color = TextWarmWhite, fontWeight = FontWeight.SemiBold)
-                                    Text("Distillery: ${rev.revealedDistillery} • Proof: ${rev.revealedProof}", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
-                                    Text("Assessments: Nose ${rev.revealedNoseScore}/7 | Palate ${rev.revealedPalateScore}/7 | Finish ${rev.revealedFinishScore}/7", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
-                                    if (rev.revealedNotes.isNotEmpty()) {
-                                        Text("Overall notes: ${rev.revealedNotes}", color = TextSoftGray, fontStyle = FontStyle.Italic, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Divider(color = SlateMuted.copy(alpha = 0.5f))
                                 }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Page 23: Compare guesses with actual revealed session side-by-side (two columns)
+ */
+@Composable
+fun CompareRevealScreen(revealId: Long, viewModel: BourbonViewModel, navController: NavController) {
+    var reveal by remember { mutableStateOf<BlindReveal?>(null) }
+    
+    LaunchedEffect(revealId) {
+        reveal = viewModel.getBlindRevealById(revealId)
+    }
+
+    JournalScreenScaffold(
+        title = "Blind Compare",
+        subtitle = "Glass #${reveal?.pourNumber ?: ""}",
+        onBackClick = { navController.popBackStack() }
+    ) {
+        if (reveal == null) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = PrimaryAmber)
+            }
+        } else {
+            val rev = reveal!!
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Description header
+                Text(
+                    text = "Side-by-side comparison of your initial blind evaluation guesses vs the actual revealed bottle specifications.",
+                    color = TextSoftGray,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                // Revealed Bottle Headline Card - shifts the bottle name above the screen split
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, PrimaryAmber.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                    colors = CardDefaults.cardColors(containerColor = DarkCharcoal),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "REVEALED BOTTLE",
+                            color = TextSoftGray,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = rev.revealedName,
+                            color = PrimaryAmber,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Rank #${rev.rank}",
+                                color = TextWarmWhite,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "  •  ",
+                                color = TextSoftGray,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Pour Glass #${rev.pourNumber}",
+                                color = TextWarmWhite,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // Aligned Column Headers
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = SlateMuted.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp, horizontal = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "MY BLIND GUESS",
+                                color = PrimaryAmber,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = PrimaryAmber.copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp, horizontal = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "REVEALED REALITY",
+                                color = PrimaryAmber,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
+
+                // Grid content of aligned comparative items
+                CompareItemRow(label = "Category", guessValue = rev.guessCategory, realValue = rev.revealedCategory)
+                CompareItemRow(label = "Distillery", guessValue = rev.guessDistillery, realValue = rev.revealedDistillery)
+                CompareItemRow(label = "Proof / ABV", guessValue = rev.guessProof, realValue = rev.revealedProof)
+                CompareItemRow(label = "Nose Score", guessValue = "${rev.guessNoseScore}/7", realValue = "${rev.revealedNoseScore}/7")
+                CompareItemRow(label = "Palate Score", guessValue = "${rev.guessPalateScore}/7", realValue = "${rev.revealedPalateScore}/7")
+                CompareItemRow(label = "Finish Score", guessValue = "${rev.guessFinishScore}/7", realValue = "${rev.revealedFinishScore}/7")
+                CompareItemRow(
+                    label = "Tasting Notes",
+                    guessValue = rev.guessNotes.ifEmpty { "None logged." },
+                    realValue = rev.revealedNotes.ifEmpty { "None logged." },
+                    isNotes = true
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CompareItemRow(
+    label: String,
+    guessValue: String,
+    realValue: String,
+    isNotes: Boolean = false
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        // Divider and Label
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Divider(modifier = Modifier.weight(1f), color = SlateMuted.copy(alpha = 0.4f))
+            Text(
+                text = label.uppercase(),
+                color = TextSoftGray,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            Divider(modifier = Modifier.weight(1f), color = SlateMuted.copy(alpha = 0.4f))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // My Guess Value Box
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, SlateMuted.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                colors = CardDefaults.cardColors(containerColor = SlateMuted.copy(alpha = 0.08f)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = guessValue,
+                        color = TextWarmWhite,
+                        style = if (isNotes) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                        fontStyle = if (guessValue == "None logged.") FontStyle.Italic else FontStyle.Normal
+                    )
+                }
+            }
+
+            // Revealed Real Value Box
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, PrimaryAmber.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                colors = CardDefaults.cardColors(containerColor = DarkCharcoal),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = realValue,
+                        color = if (realValue == "None logged.") TextSoftGray else PrimaryAmber,
+                        style = if (isNotes) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isNotes) FontWeight.Normal else FontWeight.Bold,
+                        fontStyle = if (realValue == "None logged.") FontStyle.Italic else FontStyle.Normal
+                    )
                 }
             }
         }

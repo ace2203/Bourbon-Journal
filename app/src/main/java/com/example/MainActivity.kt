@@ -141,6 +141,10 @@ class MainActivity : ComponentActivity() {
                     composable(Routes.COMPLETED_BLINDS) {
                         CompletedBlindsScreen(viewModel, navController)
                     }
+                    composable("${Routes.COMPARE_REVEAL}/{revealId}") { backStackEntry ->
+                        val revId = backStackEntry.arguments?.getString("revealId")?.toLongOrNull() ?: 0L
+                        CompareRevealScreen(revId, viewModel, navController)
+                    }
                 }
             }
         }
