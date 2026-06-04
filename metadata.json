@@ -1,0 +1,6 @@
+{
+  "name": "Bourbon Journal",
+  "description": "A premium bourbon tracking, reviewing, and blind-tasting companion with offline Room storage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
