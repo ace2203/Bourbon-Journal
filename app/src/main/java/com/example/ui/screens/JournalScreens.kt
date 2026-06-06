@@ -2024,27 +2024,282 @@ fun SpecificBottleScreen(bottleId: Long, viewModel: BourbonViewModel, navControl
         onBackClick = { navController.popBackStack() }
     ) {
         if (bottle != null) {
+            var showSpecs by remember { mutableStateOf(true) }
+            var isEditing by remember { mutableStateOf(false) }
+
+            var editBoxName by remember { mutableStateOf("") }
+            var editBoxNickname by remember { mutableStateOf("") }
+            var editBoxDistillery by remember { mutableStateOf("") }
+            var editBoxAge by remember { mutableStateOf("") }
+            var editBoxProof by remember { mutableStateOf("") }
+            var editBoxCategory by remember { mutableStateOf("") }
+            var editBoxFinish by remember { mutableStateOf("") }
+            var editBoxOther by remember { mutableStateOf("") }
+
+            LaunchedEffect(bottle) {
+                editBoxName = bottle.name
+                editBoxNickname = bottle.nickname
+                editBoxDistillery = bottle.distillery
+                editBoxAge = bottle.age
+                editBoxProof = bottle.proof
+                editBoxCategory = bottle.category
+                editBoxFinish = bottle.finish
+                editBoxOther = bottle.other
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Header details
-                PremiumFormCard(title = "Specs Information") {
-                    if (bottle.nickname.isNotEmpty()) {
-                        Text(
-                            text = "\"${bottle.nickname}\"",
-                            color = PrimaryAmber,
-                            fontWeight = FontWeight.Bold,
-                            fontStyle = FontStyle.Italic,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                    Text("Distillery: ${bottle.distillery}", color = TextWarmWhite)
-                    Text("Age: ${bottle.age}", color = TextWarmWhite)
-                    Text("Proof: ${bottle.proof}", color = TextWarmWhite)
-                    Text("Category: ${bottle.category}", color = TextWarmWhite)
-                    if (bottle.finish.isNotEmpty()) {
-                        Text("Finish: ${bottle.finish}", color = TextWarmWhite)
-                    }
-                    if (bottle.other.isNotEmpty()) {
-                        Text("Other: ${bottle.other}", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
+                // Header details with expand/collapse toggle
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(4.dp, shape = RoundedCornerShape(12.dp))
+                        .border(1.dp, SlateMuted, RoundedCornerShape(12.dp))
+                        .clickable { if (!isEditing) showSpecs = !showSpecs },
+                    colors = CardDefaults.cardColors(
+                        containerColor = DarkCharcoal
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isEditing) "EDIT SPECS" else "SPECS INFORMATION",
+                                color = PrimaryAmber,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            if (!isEditing) {
+                                Icon(
+                                    imageVector = if (showSpecs) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (showSpecs) "Hide Info" else "Show Info",
+                                    tint = PrimaryAmber
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showSpecs) {
+                            if (!isEditing) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (bottle.nickname.isNotEmpty()) {
+                                        Text(
+                                            text = "\"${bottle.nickname}\"",
+                                            color = PrimaryAmber,
+                                            fontWeight = FontWeight.Bold,
+                                            fontStyle = FontStyle.Italic,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
+                                    Text("Distillery: ${bottle.distillery}", color = TextWarmWhite)
+                                    Text("Age: ${bottle.age}", color = TextWarmWhite)
+                                    Text("Proof: ${bottle.proof}", color = TextWarmWhite)
+                                    Text("Category: ${bottle.category}", color = TextWarmWhite)
+                                    if (bottle.finish.isNotEmpty()) {
+                                        Text("Finish: ${bottle.finish}", color = TextWarmWhite)
+                                    }
+                                    if (bottle.other.isNotEmpty()) {
+                                        Text("Other: ${bottle.other}", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Button(
+                                        onClick = {
+                                            editBoxName = bottle.name
+                                            editBoxNickname = bottle.nickname
+                                            editBoxDistillery = bottle.distillery
+                                            editBoxAge = bottle.age
+                                            editBoxProof = bottle.proof
+                                            editBoxCategory = bottle.category
+                                            editBoxFinish = bottle.finish
+                                            editBoxOther = bottle.other
+                                            isEditing = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SlateMuted),
+                                        modifier = Modifier.align(Alignment.End)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit Specs", tint = TextWarmWhite, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Edit Specs", color = TextWarmWhite)
+                                    }
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    OutlinedTextField(
+                                        value = editBoxName,
+                                        onValueChange = { editBoxName = it },
+                                        label = { Text("Bottle Name") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxNickname,
+                                        onValueChange = { editBoxNickname = it },
+                                        label = { Text("Nickname / Store Pick details") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxDistillery,
+                                        onValueChange = { editBoxDistillery = it },
+                                        label = { Text("Distillery") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxAge,
+                                        onValueChange = { editBoxAge = it },
+                                        label = { Text("Age (e.g. 10 Years, NAS)") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxProof,
+                                        onValueChange = { editBoxProof = it },
+                                        label = { Text("Proof") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxCategory,
+                                        onValueChange = { editBoxCategory = it },
+                                        label = { Text("Category (Bourbon, Rye, etc.)") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxFinish,
+                                        onValueChange = { editBoxFinish = it },
+                                        label = { Text("Finish information (Optional)") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = editBoxOther,
+                                        onValueChange = { editBoxOther = it },
+                                        label = { Text("Other specifications / notes") },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = TextWarmWhite,
+                                            unfocusedTextColor = TextWarmWhite,
+                                            focusedIndicatorColor = PrimaryAmber,
+                                            unfocusedIndicatorColor = SlateMuted,
+                                            focusedLabelColor = PrimaryAmber,
+                                            unfocusedLabelColor = TextSoftGray,
+                                            focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                            unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.align(Alignment.End)
+                                    ) {
+                                        TextButton(onClick = { isEditing = false }) {
+                                            Text("Cancel", color = TextSoftGray)
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val updatedBottle = bottle.copy(
+                                                    name = editBoxName,
+                                                    nickname = editBoxNickname,
+                                                    distillery = editBoxDistillery,
+                                                    age = editBoxAge,
+                                                    proof = editBoxProof,
+                                                    category = editBoxCategory,
+                                                    finish = editBoxFinish,
+                                                    other = editBoxOther
+                                                )
+                                                viewModel.updateBottle(updatedBottle)
+                                                isEditing = false
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryAmber)
+                                        ) {
+                                            Text("Save", color = ObsidianBlack, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2160,6 +2415,22 @@ fun SpecificSubBottleScreen(
     val sub = allSubs.find { it.subBottleId == subBottleId }
     val reviews = allRev.filter { it.subBottleId == subBottleId }.sortedByDescending { it.timestamp }
 
+    var editSizeMl by remember { mutableStateOf("") }
+    var editPrice by remember { mutableStateOf("") }
+    var editBoughtWhen by remember { mutableStateOf("") }
+    var editBoughtWhere by remember { mutableStateOf("") }
+    var editOther by remember { mutableStateOf("") }
+
+    LaunchedEffect(sub) {
+        sub?.let {
+            editSizeMl = it.sizeMl
+            editPrice = it.price
+            editBoughtWhen = it.boughtWhen
+            editBoughtWhere = it.boughtWhere
+            editOther = it.other
+        }
+    }
+
     // Aggregates for this sub bottle
     val avgNose = if (reviews.isNotEmpty()) reviews.map { it.noseScore }.average() else 0.0
     val avgPalate = if (reviews.isNotEmpty()) reviews.map { it.palateScore }.average() else 0.0
@@ -2173,6 +2444,157 @@ fun SpecificSubBottleScreen(
         subtitle = subBottleLabel,
         onBackClick = { navController.popBackStack() }
     ) {
+        if (sub != null) {
+            var isEditing by remember { mutableStateOf(false) }
+
+            PremiumFormCard(
+                title = if (sub.subBottleNumber == 0) "Single Pours & Unowned Info" else "Sub-Bottle #${sub.subBottleNumber} Info"
+            ) {
+                if (!isEditing) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Size: ${sub.sizeMl} ml", color = TextWarmWhite)
+                        Text("Price paid: $${sub.price}", color = TextWarmWhite)
+                        Text("Bought on: ${sub.boughtWhen}", color = TextWarmWhite)
+                        Text("Bought at: ${sub.boughtWhere}", color = TextWarmWhite)
+                        if (sub.other.isNotEmpty()) {
+                            Text("Other Details/Notes: ${sub.other}", color = TextSoftGray, style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = {
+                                editSizeMl = sub.sizeMl
+                                editPrice = sub.price
+                                editBoughtWhen = sub.boughtWhen
+                                editBoughtWhere = sub.boughtWhere
+                                editOther = sub.other
+                                isEditing = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SlateMuted),
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit Block", tint = TextWarmWhite, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Edit Info", color = TextWarmWhite)
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = editSizeMl,
+                            onValueChange = { editSizeMl = it },
+                            label = { Text("Bottle Size (ml)") },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted,
+                                focusedLabelColor = PrimaryAmber,
+                                unfocusedLabelColor = TextSoftGray,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editPrice,
+                            onValueChange = { editPrice = it },
+                            label = { Text("Price paid ($)") },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted,
+                                focusedLabelColor = PrimaryAmber,
+                                unfocusedLabelColor = TextSoftGray,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editBoughtWhen,
+                            onValueChange = { editBoughtWhen = it },
+                            label = { Text("Bought When (YYYY-MM-DD)") },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted,
+                                focusedLabelColor = PrimaryAmber,
+                                unfocusedLabelColor = TextSoftGray,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editBoughtWhere,
+                            onValueChange = { editBoughtWhere = it },
+                            label = { Text("Bought Where") },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted,
+                                focusedLabelColor = PrimaryAmber,
+                                unfocusedLabelColor = TextSoftGray,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editOther,
+                            onValueChange = { editOther = it },
+                            label = { Text("Other Details / Notes") },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = TextWarmWhite,
+                                unfocusedTextColor = TextWarmWhite,
+                                focusedIndicatorColor = PrimaryAmber,
+                                unfocusedIndicatorColor = SlateMuted,
+                                focusedLabelColor = PrimaryAmber,
+                                unfocusedLabelColor = TextSoftGray,
+                                focusedContainerColor = SlateMuted.copy(alpha = 0.2f),
+                                unfocusedContainerColor = SlateMuted.copy(alpha = 0.1f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            TextButton(onClick = { isEditing = false }) {
+                                Text("Cancel", color = TextSoftGray)
+                            }
+
+                            Button(
+                                onClick = {
+                                    val updatedSub = sub.copy(
+                                        sizeMl = editSizeMl,
+                                        price = editPrice,
+                                        boughtWhen = editBoughtWhen,
+                                        boughtWhere = editBoughtWhere,
+                                        other = editOther
+                                    )
+                                    viewModel.updateSubBottle(updatedSub)
+                                    isEditing = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryAmber)
+                            ) {
+                                Text("Save", color = ObsidianBlack, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         PremiumFormCard(title = "Sub-Bottle Aggregates") {
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -494,6 +494,18 @@ class BourbonViewModel(application: Application) : AndroidViewModel(application)
         return repository.getBlindRevealById(revealId)
     }
 
+    fun updateSubBottle(subBottle: SubBottle) {
+        viewModelScope.launch {
+            repository.updateSubBottle(subBottle)
+        }
+    }
+
+    fun updateBottle(bottle: Bottle) {
+        viewModelScope.launch {
+            repository.updateBottle(bottle)
+        }
+    }
+
     fun resetAndPrepopulateDatabase(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             repository.resetAndPrepopulate()
